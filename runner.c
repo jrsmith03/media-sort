@@ -1,13 +1,36 @@
-// Library imports
-
 /*
-1. Bad metadata = bad results
-    a. some are miscategorized into the current date
-2. Duplicate media should either be ignored or moved to a temp directory
-3. Need to have a log to undo changes. Don't delete people's photos!
+    Issues/Observations
+    1. Bad metadata = bad results
+        a. some are miscategorized into the current date
+    2. Duplicate media should either be ignored or moved to a temp directory
+    3. Need to have a log to undo changes. Don't delete people's photos!
+
+    Author: John R. Smith
+    Date: December 08, 2023
+    Version: 0.01
+
+    This application provides a simple way to sort mass amounts of photo/video/audio files
+    based on when the media was created. It also has the ability to mark duplicate files
+    (i.e media with an identical timestamp) for deletion or review. 
+
+    Although some applications provide user interfaces to display media in a sorted way,
+    the search scope is often limited. This application re-organizes media at the
+    directory level, making it easier to further organize/discover images.
+
+    File system changes can be undone by re-executing the utility with the -u
+    flag and specifying the 'media-sort.log' file that was generated when the unwanted
+    changes were made.
+
+    The general usage is to run 'media-sort' with the '-d (directory)' flag and provide
+    the relative path to the directory you want to sort. Changes will be written
+    to the 'media-sort' folder, and media will be organized according to the Month and 
+    Year the media was last modified. Duplicate files will be located in the /duplicate
+    directory within each Month-Year directory.
+
+    Currently, this application is only compatible with Unix systems, but there are
+    future plans to expand support to Windows systems.
 */
 
-// Note: This application is only compatible with Unix systems.
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <fcntl.h>
@@ -28,11 +51,13 @@ bool get_media_extension(char* name, char* buf);
 void traverse_directory(char* path_to_start, int log_fd);
 char* get_friendly_month(int month);
 bool move_media(int fd, char* old_location, char* ext, int log_fd);
+bool undo_logged_changes(int undo_log_fd);
+
 
 void itoa(int num, char* res, int len);
 
 
-// Main entry point into program
+// Parse user arguments, display usage messages given improper input.
 int main(int argc, char** argv) {    
     // attempt the open syscall
     // allocate on the stack for now   
@@ -40,20 +65,33 @@ int main(int argc, char** argv) {
     // The user will specify which directory they wish to put the sorted files in, but for now
     // we will assume it's on working directoy. 
     int log_fd = creat( "log.ps", 0);
-    if (argc > 2 && strcmp(argv[1], "-d") == 0 && argv[2]) {
-        strcpy(DIR_PATH, argv[2]);
-    } else {
-        // DIR_PATH = "test\0";
-        printf("usage: photo-sort -d <relative directory path>\n");
-        exit(-1);
-    }
-    // printf("the dir path: %s\n", DIR_PATH);
-    // for (int i = 1; i < argc; i++) {
-    //     if (i % 2 == 0) {
 
-    //     }
-    //     printf("the first argv: %s\n", argv[i]);
-    // }
+    // Scan the command-line arguments for desired flags. If none of hte arguments match flags, 
+    // print the usage message.
+    for (int i = 1; i < argc; i++) {
+        if (i % 2 != 0) {
+            if (argc > 2 && strcmp(argv[i], "-d") == 0 && argv[2]) {
+                strcpy(DIR_PATH, argv[i+1]);
+            } else if (argc > 2 && strcmp(argv[1], "-u") == 0 && argv[i+1]) {
+                printf("the file: %s\n", argv[i+1]);
+                int undo_fd = open(argv[i+1], O_RDWR);
+                
+                if (undo_fd > 0 && undo_logged_changes(undo_fd)) {
+                    printf("Changes successfully undone.\n");
+                    exit(1);
+                } else {
+                    printf("Invalid undo file argument, please verify the file name and try again.\n");
+                    exit(-1);
+                }
+            } else {
+                // DIR_PATH = "test\0";
+                printf("usage: photo-sort -d <relative directory path>\n");
+                exit(-1);
+            }
+        }
+        
+        printf("the first argv: %s\n", argv[i]);
+    }
     size_t written = write(log_fd, "start photo-sort\0\n", 19);
     traverse_directory(DIR_PATH, log_fd);
     
@@ -226,31 +264,34 @@ void get_file_rename(char* file_rename, char* subdir, struct tm *time) {
 
 }
 
-// void undo_logged_changes(int undo_log_fd) {
-//     char line_buf_read[300];
-//     size_t res = 1;
-//     char c;
-//     int i = 0;
-//     while (res = read(undo_log_fd, c, 1) == 1) {
-//             if (c != '\n') {
-//                 line_buf_read[i++] = c;
-//             } else {
-//                 i = 0;
-//                 char *return_dir = (char*) malloc(300);
-//                 char *undo_dir = (char*) malloc(300);
+bool undo_logged_changes(int undo_log_fd) {
+    char line_buf_read[300];
+    size_t res = 1;
+    char c;
+    int i = 0;
+    while (res = read(undo_log_fd, c, 1) == 1) {
+        if (c != '\n') {
+            line_buf_read[i++] = c;
+        } else {
+            i = 0;
+            char *return_dir = (char*) malloc(300);
+            char *undo_dir = (char*) malloc(300);
 
-//                 // first tok is a deliminator
-//                 strtok(line_buf_read, "$");
-//                 // second tok is the original directory
-//                 return_dir = strtok(line_buf_read, "$");
-//                 // third tok is the new directory
-//                 undo_dir = strtok(line_buf_read, "$");
-//                 // end of line should appear here.
+            // first tok is a deliminator
+            strtok(line_buf_read, "$");
+            // second tok is the original directory
+            return_dir = strtok(line_buf_read, "$");
+            // third tok is the new directory
+            undo_dir = strtok(line_buf_read, "$");
+            // end of line should appear here.
 
-//                 // Want to 
-//             }
-//         }
-// }
+            // rename will move the file back and restore the name
+            return (rename(undo_dir, return_dir) > 0);
+            
+        }
+    }
+    return false;
+}
 char* get_friendly_month(int month) {
     switch (month) {
         case 1 : 
