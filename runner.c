@@ -47,13 +47,7 @@ int main(int argc, char** argv) {
         printf("usage: photo-sort -d <relative directory path>\n");
         exit(-1);
     }
-    // printf("the dir path: %s\n", DIR_PATH);
-    // for (int i = 1; i < argc; i++) {
-    //     if (i % 2 == 0) {
 
-    //     }
-    //     printf("the first argv: %s\n", argv[i]);
-    // }
     size_t written = write(log_fd, "start photo-sort\0\n", 19);
     traverse_directory(DIR_PATH, log_fd);
     
@@ -174,9 +168,6 @@ bool move_media(int fd, char* old_location, char* ext, int log_fd) {
         if (!opendir(dup_name)) mkdir(dup_name, 0700);
         int dup_log_fd = open("dup_log.ps", O_RDWR);
 
-
-
-        
         strcat(dup_name, "/");
         strcat(dup_name, file_rename);
         strcat(dup_name, "_");
@@ -226,31 +217,6 @@ void get_file_rename(char* file_rename, char* subdir, struct tm *time) {
 
 }
 
-// void undo_logged_changes(int undo_log_fd) {
-//     char line_buf_read[300];
-//     size_t res = 1;
-//     char c;
-//     int i = 0;
-//     while (res = read(undo_log_fd, c, 1) == 1) {
-//             if (c != '\n') {
-//                 line_buf_read[i++] = c;
-//             } else {
-//                 i = 0;
-//                 char *return_dir = (char*) malloc(300);
-//                 char *undo_dir = (char*) malloc(300);
-
-//                 // first tok is a deliminator
-//                 strtok(line_buf_read, "$");
-//                 // second tok is the original directory
-//                 return_dir = strtok(line_buf_read, "$");
-//                 // third tok is the new directory
-//                 undo_dir = strtok(line_buf_read, "$");
-//                 // end of line should appear here.
-
-//                 // Want to 
-//             }
-//         }
-// }
 char* get_friendly_month(int month) {
     switch (month) {
         case 1 : 
