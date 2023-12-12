@@ -50,7 +50,7 @@
 bool get_media_extension(char* name, char* buf);
 void traverse_directory(char* path_to_start, int log_fd);
 char* get_friendly_month(int month);
-bool move_media(int fd, char* old_location, char* ext, int log_fd);
+bool move_media(char* old_location, char* ext, int log_fd);
 bool undo_logged_changes(int undo_log_fd);
 
 
@@ -71,7 +71,8 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; i++) {
         if (i % 2 != 0) {
             if (argc > 2 && strcmp(argv[i], "-d") == 0 && argv[2]) {
-                strcpy(DIR_PATH, argv[i+1]);
+                strncpy(DIR_PATH, argv[i+1], strlen(argv[i+1]));
+                DIR_PATH[strlen(argv[i+1])+1] = "\0";
             } else if (argc > 2 && strcmp(argv[1], "-u") == 0 && argv[i+1]) {
                 printf("the file: %s\n", argv[i+1]);
                 int undo_fd = open(argv[i+1], O_RDWR);
@@ -107,10 +108,11 @@ void traverse_directory(char* path_to_start, int log_fd) {
             DIR *child_dir;
             bool is_dir = false;
             bool not_implicit = (strcmp(main_dir->d_name, ".") != 0) && (strcmp(main_dir->d_name, "..") != 0);
-            char my_path[1000];
+            char *my_path = (char*) malloc(1000);
             strcpy(my_path, path_to_start);
             strcat(my_path, "/\0");
             strcat(my_path, main_dir->d_name);
+            printf("path: %s\n", my_path);
             if (not_implicit && (child_dir = opendir(my_path))) {
                 is_dir = true;
                 printf("(parent %s) file %s is directory\n", path_to_start, my_path);
@@ -118,14 +120,12 @@ void traverse_directory(char* path_to_start, int log_fd) {
             }
             printf("(parent %s) child file name: %s\n", path_to_start, main_dir->d_name);
             // Create a new file descriptor for this file entry without any special arguments.
-            int fd = open(my_path, 0);
             // Filter such that we are only reading valid image files
-            char tok[strlen(my_path)];
-            char why[strlen(my_path)];
-            strcpy(why, my_path);
+            char *tok = (char*) malloc(3);
+            printf("before the funcx: %s\n", my_path);
             
-            if (not_implicit && !is_dir && tok && get_media_extension(why, tok)) {
-                move_media(fd, my_path, tok, log_fd);
+            if (not_implicit && !is_dir && get_media_extension(my_path, tok)) {
+                move_media(my_path, tok, log_fd);
             } 
         } 
     }
@@ -136,19 +136,36 @@ void traverse_directory(char* path_to_start, int log_fd) {
     if it is a media (i.e image, video) file. Return true if so.
 */
 bool get_media_extension(char* name, char* ext) {
-    char *tok = (char*) malloc(strlen(name));
+    char *tok = (char*) malloc(strlen(name) + 1);
+    char cpy[strlen(name) + 1];
+
+    // strcpy(tok, name);
+    for (int i = 0; i < strlen(name); i++) {
+        cpy[i] = name[i];
+    }
+    // cpy[strlen(name) + 1] = "\0";
     printf("name: %s\n", name);
-    tok = strtok(name, ".");
+
+    tok = strtok(cpy, ".");
+    printf("first tok: %s\n", tok);
     if (!tok) return false;
     tok = strtok(NULL, ".");
+    printf("second tok: %s\n", tok);
+
+    for (int i = 0; i < 3; i++) {
+        ext[i] = tok[i];
+    }
+    ext[3] = "\0";
+    printf("ext: %s\n", ext);
     if (!tok) return false;
     // todo: refine this logic 
-    if (strcmp(tok, "jpg") == 0 || strcmp(tok, "png") == 0 || strcmp(tok, "JPG") == 0 || 
-        strcmp(tok, "bmp") == 0 || strcmp(tok, "mov") == 0 || strcmp(tok, "mp4") == 0 ||
-        strcmp(tok, "mpg") == 0) {
-        strcpy(ext, tok);
+    if (strncmp(ext, "jpg", 3) == 0 || strncmp(ext, "png", 3) == 0 || strncmp(ext, "JPG", 3) == 0 || 
+        strncmp(ext, "bmp", 3) == 0 || strncmp(ext, "mov", 3) == 0 || strncmp(ext, "mp4", 3) == 0 ||
+        strncmp(ext, "mpg", 3) == 0) {
+        printf("true\n");
         return true;
     }
+
     return false;
 }
 
@@ -174,10 +191,11 @@ void create_dir(int year, int month, char* friendly_dirname, char* friendly_subd
     if (!opendir(friendly_dirname)) mkdir(friendly_dirname, 0700);
 }
 
-bool move_media(int fd, char* old_location, char* ext, int log_fd) {
+bool move_media(char* old_location, char* ext, int log_fd) {
     // Get a tm struct that identifies when the media was modified
     struct stat my_stat;
-    fstat(fd, &my_stat);
+    printf("provided location in movemedia: %s\n", old_location);
+    stat(old_location, &my_stat);
     struct tm *x;
     x = localtime(&my_stat.st_mtime);
     char new_name[100];
@@ -211,10 +229,7 @@ bool move_media(int fd, char* old_location, char* ext, int log_fd) {
         strcat(dup_name, "/duplicate");
         if (!opendir(dup_name)) mkdir(dup_name, 0700);
         int dup_log_fd = open("dup_log.ps", O_RDWR);
-
-
-
-        
+       
         strcat(dup_name, "/");
         strcat(dup_name, file_rename);
         strcat(dup_name, "_");
